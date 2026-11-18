@@ -13,7 +13,22 @@ from tempfile import TemporaryDirectory
 RAIZ = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(RAIZ))
 
-from schulz_mvp.webapp import criar_aplicacao  # noqa: E402
+# O webapp precisa do Flask, que é uma dependência OPCIONAL: o núcleo do
+# projeto roda apenas com a biblioteca padrão. Sem Flask, os testes do
+# webapp são pulados com uma mensagem clara — em vez de o módulo inteiro
+# falhar na importação e reprovar a suite inteira.
+try:
+    from schulz_mvp.webapp import criar_aplicacao  # noqa: E402
+
+    FLASK_DISPONIVEL = True
+except ImportError:  # pragma: no cover - depende do ambiente
+    FLASK_DISPONIVEL = False
+    criar_aplicacao = None
+
+MENSAGEM_SEM_FLASK = (
+    "Flask não está instalado — rode "
+    "'pip install -r requirements.txt' para habilitar os testes do webapp"
+)
 
 DOWNLOADS = Path.home() / "Downloads"
 PLANILHA_REAL = DOWNLOADS / "Registro MMC.xlsx"
@@ -21,6 +36,7 @@ PLANILHA_MODELO = DOWNLOADS / "planilha MMC.xlsm"
 PLANILHA_OUTRA = DOWNLOADS / "Dispositivo de controle (1).xlsx"
 
 
+@unittest.skipUnless(FLASK_DISPONIVEL, MENSAGEM_SEM_FLASK)
 class TesteDoWebapp(unittest.TestCase):
     """Base com uma aplicação isolada e um banco temporário."""
 
