@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block titulo %}Prévia da importação — MVP Calibração{% endblock %}
+{% block conteudo %}
+
+<div class="cartao">
+  <h2>Prévia da importação</h2>
+  <p>
+    Arquivo <strong>{{ previa.arquivo }}</strong> &middot; aba
+    <code>{{ previa.aba }}</code> &middot; hash
+    <code>{{ previa.hash }}</code>
+  </p>
+  <p>
+    <strong>{{ previa.total_registros }}</strong> medição(ões) extraída(s) em
+    {{ previa.blocos|length }} bloco(s) &middot;
+    <strong>{{ previa.total_pendencias }}</strong> pendência(s) detectada(s).
+  </p>
+  <p>
+    <strong>Nada foi gravado ainda.</strong> Confira os dados abaixo antes de confirmar.
+  </p>
+</div>
+
+<div class="cartao">
+  <h3>Metadados extraídos</h3>
+  <dl class="metadados">
+    {% for chave, valor in previa.metadados.items() %}
+    <dt>{{ chave }}</dt>
+    <dd>{{ valor if valor is not none else "—" }}</dd>
+    {% endfor %}
+  </dl>
+</div>
+
+{% if previa.total_pendencias %}
+<div class="cartao">
+  <h3>Pendências detectadas</h3>
+  <table>
+    <thead>
+      <tr><th>Criticidade</th><th>Campo</th><th>Linha</th><th>Descrição</th></tr>
+    </thead>
+    <tbody>
+      {% for p in resultado.pendencias %}
+      <tr>
+        <td class="{{ 'reprovado' if p.criticidade == 'ALTA' else 'alerta' }}">
+          {{ p.criticidade }}
+        </td>
+        <td><code>{{ p.campo }}</code></td>
+        <td class="num">{{ p.linha_origem if p.linha_origem is not none else "—" }}</td>
+        <td>{{ p.descricao }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<div class="cartao">
+  <h3>Medições extraídas</h3>
+  {% if registro.registros %}
+  <table>
+    <thead>
+      <tr>
+        <th>Linha</th><th>Bloco</th><th>Característica</th>
+        <th>Nominal</th><th>Obtido</th><th>Tol. sup.</th><th>Tol. inf.</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for m in registro.registros %}
+      <tr>
+        <td class="num">{{ m.linha_origem }}</td>
+        <td class="num">{{ m.bloco }}</td>
+        <td>{{ m.caracteristica }}</td>
+        <td class="num">{{ m.valor_nominal or "—" }}</td>
+        <td class="num">{{ m.valor_obtido or "—" }}</td>
+        <td class="num">{{ m.tol_superior or "—" }}</td>
+        <td class="num">{{ m.tol_inferior or "—" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="vazio">Nenhuma medição encontrada nesta planilha.</p>
+  {% endif %}
+</div>
+
+<div class="cartao">
+  <form method="post" action="{{ url_for('confirmar') }}">
+    <button type="submit">Confirmar e gravar no banco</button>
+  </form>
+  <form method="post" action="{{ url_for('index') }}" style="display:inline">
+    <button type="submit" class="secundario">Descartar</button>
+  </form>
+</div>
+
+{% endblock %}

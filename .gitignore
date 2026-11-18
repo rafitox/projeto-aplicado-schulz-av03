@@ -1,0 +1,41 @@
+# Banco de dados gerado pelo sistema — não versionar.
+# O professor o gera ao rodar `python 05_main.py`.
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Ambiente virtual
+.venv/
+venv/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# Arquivos enviados pelo usuário (upload temporário)
+# A regra protege os arquivos da empresa: nenhum .xlsx da Schulz entra
+# no repositório por engano.
+uploads/
+*.xlsx
+*.xlsm
+*.xls
+
+# ...exceto a planilha de exemplo, que é gerada por
+# tools/gerar_planilha_exemplo.py e contém dados fictícios. Incluí-la
+# permite testar o upload sem qualquer arquivo da empresa.
+!planilha_exemplo.xlsx
+
+# Intermediários de geração de PDF
+*.odt
+
+# Editores e sistema operacional
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db

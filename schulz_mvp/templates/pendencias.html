@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block titulo %}Pendências — MVP Calibração{% endblock %}
+{% block conteudo %}
+
+{% if agrupadas %}
+<div class="cartao">
+  <h2>Pendências por campo</h2>
+  <table>
+    <thead>
+      <tr><th>Campo</th><th>Quantidade</th><th>Criticidade máxima</th></tr>
+    </thead>
+    <tbody>
+      {% for a in agrupadas %}
+      <tr>
+        <td><code>{{ a['campo'] }}</code></td>
+        <td class="num">{{ a['quantidade'] }}</td>
+        <td class="{{ 'reprovado' if a['criticidade'] == 'ALTA' else 'alerta' }}">
+          {{ a['criticidade'] }}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<div class="cartao">
+  <h2>Pendências em aberto</h2>
+  <p>
+    Uma medição com pendência em aberto <strong>não pode ser aprovada</strong>
+    para emissão de certificado (RN13).
+  </p>
+  {% if pendencias %}
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th><th>Criticidade</th><th>Campo</th>
+        <th>Origem</th><th>Descrição</th><th>Ação</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in pendencias %}
+      <tr>
+        <td class="num">{{ p['id_pendencia'] }}</td>
+        <td class="{{ 'reprovado' if p['criticidade'] == 'ALTA' else 'alerta' }}">
+          {{ p['criticidade'] }}
+        </td>
+        <td><code>{{ p['campo'] }}</code></td>
+        <td>{{ p['origem_arquivo'] or "—" }}</td>
+        <td>{{ p['descricao'] }}</td>
+        <td>
+          <form method="post" action="{{ url_for('resolver_pendencia', id_pendencia=p['id_pendencia']) }}">
+            <button type="submit">Resolver</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="vazio">Nenhuma pendência em aberto.</p>
+  {% endif %}
+</div>
+
+{% endblock %}

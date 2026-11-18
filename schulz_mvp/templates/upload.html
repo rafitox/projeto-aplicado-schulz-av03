@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block titulo %}Upload de planilha — MVP Calibração{% endblock %}
+{% block conteudo %}
+
+{% if erro %}
+<div class="flash erro">{{ erro }}</div>
+{% endif %}
+
+<div class="cartoes">
+  <div class="cartao-num">
+    <div class="n">{{ resumo.total }}</div>
+    <div class="r">Medições</div>
+  </div>
+  <div class="cartao-num">
+    <div class="n" style="color: var(--aprovado)">{{ resumo.aprovados }}</div>
+    <div class="r">Aprovadas</div>
+  </div>
+  <div class="cartao-num">
+    <div class="n" style="color: var(--reprovado)">{{ resumo.reprovados }}</div>
+    <div class="r">Reprovadas</div>
+  </div>
+  <div class="cartao-num">
+    <div class="n" style="color: var(--alerta)">{{ resumo.pendencias }}</div>
+    <div class="r">Pendências</div>
+  </div>
+</div>
+
+<div class="cartao">
+  <h2>Importar planilha de medição</h2>
+  <p>
+    Envie a planilha gerada pela Máquina de Medição por Coordenadas
+    (<code>.xlsx</code> ou <code>.xlsm</code>). O arquivo é processado e
+    <strong>exibido para conferência</strong> — nada é gravado no banco antes
+    da sua confirmação.
+  </p>
+  <form method="post" action="{{ url_for('importar') }}" enctype="multipart/form-data">
+    <input type="file" name="arquivo" accept=".xlsx,.xlsm" required>
+    <button type="submit">Processar planilha</button>
+  </form>
+</div>
+
+{% if pendencias %}
+<div class="cartao">
+  <h2>Pendências em aberto</h2>
+  <table>
+    <thead>
+      <tr><th>Criticidade</th><th>Campo</th><th>Descrição</th></tr>
+    </thead>
+    <tbody>
+      {% for p in pendencias %}
+      <tr>
+        <td class="{{ 'reprovado' if p['criticidade'] == 'ALTA' else 'alerta' }}">
+          {{ p['criticidade'] }}
+        </td>
+        <td><code>{{ p['campo'] }}</code></td>
+        <td>{{ p['descricao'] }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+{% endblock %}

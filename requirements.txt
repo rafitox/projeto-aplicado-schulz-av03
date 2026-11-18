@@ -1,0 +1,22 @@
+# Dependências OPCIONAIS do webapp de upload.
+#
+# O núcleo do MVP (04_classes.py, 05_main.py) e a suíte de testes rodam
+# APENAS com a biblioteca padrão do Python 3.8+ — nenhuma dependência
+# externa é necessária para:
+#
+#   python 05_main.py
+#   python -m unittest discover -s tests -v
+#
+# Estas bibliotecas são exigidas apenas por:
+#
+#   python 07_webapp.py
+#
+#   Flask     -> rotas HTTP e upload multipart
+#   openpyxl  -> leitura de .xlsx/.xlsm (há um fallback de biblioteca
+#                 padrão para quando o openpyxl não está instalado)
+#
+# Instalação:
+#   pip install -r requirements.txt
+
+Flask>=3.0,<4.0
+openpyxl>=3.1,<4.0

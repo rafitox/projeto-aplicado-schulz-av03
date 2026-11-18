@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block titulo %}MVP Calibração — Schulz S.A.{% endblock %}</title>
+  <style>
+    :root {
+      --azul: #1f4e79;
+      --azul-claro: #eaf1f8;
+      --cinza: #4a4a4a;
+      --borda: #d0d7de;
+      --aprovado: #1a7f37;
+      --reprovado: #b42318;
+      --alerta: #b54708;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      margin: 0;
+      color: #1a1a1a;
+      background: #f6f8fa;
+      line-height: 1.5;
+    }
+    header {
+      background: var(--azul);
+      color: #fff;
+      padding: 1rem 2rem;
+    }
+    header h1 { margin: 0; font-size: 1.25rem; font-weight: 600; }
+    header p { margin: .25rem 0 0; font-size: .85rem; opacity: .85; }
+    nav {
+      background: var(--azul-claro);
+      border-bottom: 1px solid var(--borda);
+      padding: 0 2rem;
+    }
+    nav a {
+      display: inline-block;
+      padding: .7rem 1rem;
+      color: var(--azul);
+      text-decoration: none;
+      font-size: .9rem;
+      font-weight: 500;
+      border-bottom: 2px solid transparent;
+    }
+    nav a:hover, nav a.ativo { border-bottom-color: var(--azul); }
+    main { max-width: 1200px; margin: 0 auto; padding: 2rem; }
+    h2 { font-size: 1.1rem; color: var(--azul); margin-top: 0; }
+    h3 { font-size: .95rem; color: var(--cinza); }
+    .cartao {
+      background: #fff;
+      border: 1px solid var(--borda);
+      border-radius: 6px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+    .cartoes { display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
+    .cartao-num {
+      background: #fff;
+      border: 1px solid var(--borda);
+      border-radius: 6px;
+      padding: 1rem 1.25rem;
+      min-width: 140px;
+    }
+    .cartao-num .n { font-size: 1.75rem; font-weight: 700; color: var(--azul); }
+    .cartao-num .r { font-size: .8rem; color: var(--cinza); text-transform: uppercase; }
+    table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+    th, td { padding: .5rem .6rem; border-bottom: 1px solid var(--borda); text-align: left; }
+    th { background: var(--azul-claro); font-weight: 600; color: var(--azul); }
+    td.num { text-align: right; font-variant-numeric: tabular-nums; }
+    .aprovado { color: var(--aprovado); font-weight: 600; }
+    .reprovado { color: var(--reprovado); font-weight: 600; }
+    .alerta { color: var(--alerta); font-weight: 600; }
+    .flash { padding: .75rem 1rem; border-radius: 5px; margin-bottom: 1rem; }
+    .flash.erro { background: #fdecea; border: 1px solid #f5c2c0; color: var(--reprovado); }
+    .flash.sucesso { background: #e8f5e9; border: 1px solid #b8e0bc; color: var(--aprovado); }
+    input[type=file] { margin: .5rem 0; }
+    button {
+      background: var(--azul); color: #fff; border: 0; border-radius: 5px;
+      padding: .6rem 1.25rem; font-size: .9rem; cursor: pointer; font-weight: 500;
+    }
+    button:hover { background: #163a5a; }
+    button.secundario { background: #fff; color: var(--azul); border: 1px solid var(--azul); }
+    dl.metadados { display: grid; grid-template-columns: 200px 1fr; gap: .35rem 1rem; margin: 0; }
+    dl.metadados dt { font-weight: 600; color: var(--cinza); font-size: .85rem; }
+    dl.metadados dd { margin: 0; font-size: .85rem; }
+    .vazio { color: var(--cinza); font-style: italic; padding: 1.5rem 0; text-align: center; }
+    code { background: var(--azul-claro); padding: .1rem .35rem; border-radius: 3px; font-size: .85em; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>{% block cabecalho %}MVP de Calibração — Schulz S.A.{% endblock %}</h1>
+    <p>Projeto Aplicado I &middot; Entrega 03 (AV03) &middot; Funil de metrologia</p>
+  </header>
+  <nav>
+    <a href="{{ url_for('index') }}" class="{% if request.endpoint == 'index' %}ativo{% endif %}">Upload</a>
+    <a href="{{ url_for('relatorio') }}" class="{% if request.endpoint == 'relatorio' %}ativo{% endif %}">Relatório</a>
+    <a href="{{ url_for('pendencias') }}" class="{% if request.endpoint == 'pendencias' %}ativo{% endif %}">Pendências</a>
+  </nav>
+  <main>
+    {% with mensagens = get_flashed_messages(with_categories=true) %}
+      {% if mensagens %}
+        {% for categoria, mensagem in mensagens %}
+          <div class="flash {{ categoria }}">{{ mensagem }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+    {% block conteudo %}{% endblock %}
+  </main>
+</body>
+</html>
