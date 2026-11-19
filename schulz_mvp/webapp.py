@@ -35,8 +35,10 @@ from __future__ import annotations
 
 import os
 import re
+import secrets
 import tempfile
 import uuid
+from urllib.parse import urlencode
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Optional
@@ -102,13 +104,61 @@ def criar_aplicacao(caminho_banco: Optional[str] = None) -> Flask:
         __name__,
         template_folder=str(Path(__file__).parent / "templates"),
     )
-    aplicacao.config["SECRET_KEY"] = os.environ.get(
-        "SCHULZ_SECRET_KEY", "schulz-av03-desenvolvimento-local"
-    )
+    # A chave que assina o cookie de sessao precisa ser aleatoria e
+    # secreta. Uma chave fixa no codigo (e portanto visivel no
+    # repositorio) permitiria a qualquer pessoa forjar um cookie de
+    # sessao apontando para um caminho de arquivo arbitrario.
+    # A variavel de ambiente continua sendo o jeito de fixar a chave
+    # entre reinicios, quando isso for realmente necessario.
+    aplicacao.config["SECRET_KEY"] = os.environ.get("SCHULZ_SECRET_KEY") or secrets.token_hex(32)
+
+    # Controle de acesso opcional (RNF01). Vazio = aberto, que e o
+    # comportamento do uso local. Preenchido = todas as rotas exigem o
+    # token, o que torna seguro expor a aplicacao em um tunel publico.
+    aplicacao.config["TOKEN_ACESSO"] = os.environ.get(
+        "SCHULZ_ACCESS_TOKEN", ""
+    ).strip()
+
     aplicacao.config["MAX_CONTENT_LENGTH"] = TAMANHO_MAXIMO
     aplicacao.config["CAMINHO_BANCO"] = caminho_banco or str(
         RAIZ_PROJETO / "calibracao.db"
     )
+
+    @aplicacao.before_request
+    def _exigir_token_de_acesso() -> Any:
+        """Bloqueia a requisicao quando o token de acesso nao confere.
+
+        O token pode vir do cabecalho ``X-Access-Token``, da query
+        ``?token=`` ou do cookie da sessao (gravado apos a primeira
+        apresentacao correta).
+        """
+        esperado = aplicacao.config.get("TOKEN_ACESSO") or ""
+        if not esperado:
+            return None
+
+        # A propria rota de acesso precisa ser alcancavel: e ela que
+        # recebe o token. Sem esta excecao, o POST com o token correto
+        # seria bloqueado antes de chegar a rota.
+        if request.endpoint == "acesso" or request.path == "/acesso":
+            return None
+
+        fornecido = (
+            request.headers.get("X-Access-Token")
+            or request.args.get("token")
+            or request.cookies.get("schulz_token")
+            or ""
+        )
+        if fornecido and secrets.compare_digest(str(fornecido), esperado):
+            return None
+
+        if _pede_json():
+            return jsonify(
+                {
+                    "ok": False,
+                    "erro": "token de acesso invalido ou ausente",
+                }
+            ), 401
+        return render_template("acesso.html"), 401
 
     @aplicacao.context_processor
     def _variaveis_comuns() -> dict:
@@ -124,6 +174,67 @@ def criar_aplicacao(caminho_banco: Optional[str] = None) -> Flask:
             return jsonify({"ok": False, "erro": mensagem}), 413
         flash(mensagem, "erro")
         return redirect(url_for("index"))
+
+    @aplicacao.after_request
+    def _persistir_token(resposta: Any) -> Any:
+        """Grava o token em cookie quando ele chegou pela URL ou cabecalho.
+
+        Sem isso, ``?token=...`` valeria apenas para a requisicao atual:
+        o proximo POST (a confirmacao da importacao) voltaria a ser
+        barrado, porque nao haveria cookie nem token na URL.
+        """
+        esperado = aplicacao.config.get("TOKEN_ACESSO") or ""
+        if not esperado:
+            return resposta
+        if request.cookies.get("schulz_token") == esperado:
+            return resposta
+
+        fornecido = request.args.get("token") or request.headers.get("X-Access-Token")
+        if not fornecido or not secrets.compare_digest(str(fornecido), esperado):
+            return resposta
+
+        # O token nao deve ficar na barra de endereco (historico do
+        # navegador e cabecalho Referer). O cookie ja o substitui.
+        # O redirecionamento vale so para GET: em um POST, trocar a
+        # resposta pelo preview faria o usuario perder a previa.
+        if (
+            request.method == "GET"
+            and request.args.get("token")
+            and not request.path.startswith("/api/")
+        ):
+            destino = request.path
+            outros = {
+                chave: valor
+                for chave, valor in request.args.items()
+                if chave != "token"
+            }
+            if outros:
+                destino = f"{destino}?{urlencode(outros)}"
+
+            # O cookie precisa ser gravado NA RESPOSTA DO REDIRECIONAMENTO.
+            # `redirect()` cria um objeto novo: um `set_cookie()` feito na
+            # resposta original seria descartado com ela.
+            redirecionamento = redirect(destino)
+            _gravar_cookie_token(redirecionamento, esperado)
+            return redirecionamento
+
+        _gravar_cookie_token(resposta, esperado)
+        return resposta
+
+    @aplicacao.route("/acesso", methods=["POST"])
+    def acesso() -> Any:
+        """Confere o token digitado e o grava em cookie.
+
+        O cookie é o que permite navegar depois do primeiro acesso sem
+        repetir o token a cada página.
+        """
+        esperado = aplicacao.config.get("TOKEN_ACESSO") or ""
+        fornecido = (request.form.get("token") or "").strip()
+        if not esperado or not secrets.compare_digest(fornecido, esperado):
+            return render_template("acesso.html", erro="Token inválido."), 401
+        resposta = redirect(url_for("index"))
+        _gravar_cookie_token(resposta, esperado)
+        return resposta
 
     @aplicacao.route("/")
     def index() -> Any:
@@ -382,6 +493,22 @@ def _nome_para_exibicao(nome_enviado: str) -> str:
     nome = nome.replace("\\", "/").split("/")[-1]
     nome = _CARACTERES_CONTROLE.sub(" ", nome).strip()
     return nome or "arquivo"
+
+
+def _gravar_cookie_token(resposta: Any, token: str) -> None:
+    """Grava o token de acesso em um cookie HttpOnly.
+
+    O cookie dura 8 horas e usa ``SameSite=Lax``: o navegador o envia nas
+    requisicoes normais, mas nao em POST originados por outro site, o que
+    reduz o risco de um falso cross-site request.
+    """
+    resposta.set_cookie(
+        "schulz_token",
+        token,
+        httponly=True,
+        samesite="Lax",
+        max_age=8 * 3600,
+    )
 
 
 def _pagina_de_upload_com_erro(aplicacao: Flask, mensagem: str):

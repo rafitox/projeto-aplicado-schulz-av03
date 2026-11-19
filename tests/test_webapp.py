@@ -4,6 +4,7 @@ Usa o cliente de teste do Flask, que não abre porta de rede.
 """
 
 import io
+import os
 import sqlite3
 import sys
 import unittest
@@ -280,6 +281,93 @@ class TestImportacaoDePlanilhaVazia(TesteDoWebapp):
         self.cliente.post("/confirmar")
         self.assertEqual(self._contar("medicao"), 0)
         self.assertGreater(self._contar("pendencia"), 0)
+
+
+class TestControleDeAcesso(TesteDoWebapp):
+    """Controle de acesso por token (RNF01), ativado por variavel de ambiente.
+
+    O token só é exigido quando ``SCHULZ_ACCESS_TOKEN`` está definido — o
+    uso local permanece aberto, como antes. Com o token definido, é o que
+    torna seguro expor a aplicação em um túnel público.
+    """
+
+    TOKEN = "token-de-teste-123"
+
+    def setUp(self):
+        os.environ["SCHULZ_ACCESS_TOKEN"] = self.TOKEN
+        try:
+            super().setUp()
+        finally:
+            os.environ.pop("SCHULZ_ACCESS_TOKEN", None)
+
+    def _criar_app_com_token(self):
+        """Recria a aplicação lendo o token do ambiente."""
+        os.environ["SCHULZ_ACCESS_TOKEN"] = self.TOKEN
+        aplicacao = criar_aplicacao(str(self.banco))
+        aplicacao.config["TESTING"] = True
+        os.environ.pop("SCHULZ_ACCESS_TOKEN", None)
+        return aplicacao.test_client()
+
+    def test_sem_token_a_pagina_fica_bloqueada(self):
+        cliente = self._criar_app_com_token()
+        resposta = cliente.get("/")
+        self.assertEqual(resposta.status_code, 401)
+        self.assertIn(b"token", resposta.data.lower())
+
+    def test_sem_token_a_api_responde_401_em_json(self):
+        cliente = self._criar_app_com_token()
+        resposta = cliente.get("/api/medicoes")
+        self.assertEqual(resposta.status_code, 401)
+        self.assertFalse(resposta.get_json()["ok"])
+
+    def test_token_errado_e_rejeitado(self):
+        cliente = self._criar_app_com_token()
+        resposta = cliente.post("/acesso", data={"token": "errado"})
+        self.assertEqual(resposta.status_code, 401)
+
+    def test_token_certo_no_formulario_grava_cookie(self):
+        cliente = self._criar_app_com_token()
+        resposta = cliente.post("/acesso", data={"token": self.TOKEN})
+        self.assertEqual(resposta.status_code, 302)
+        self.assertIn("schulz_token", resposta.headers.get("Set-Cookie", ""))
+
+    def test_cookie_permite_navegar(self):
+        cliente = self._criar_app_com_token()
+        cliente.post("/acesso", data={"token": self.TOKEN})
+        self.assertEqual(cliente.get("/").status_code, 200)
+
+    def test_token_por_cabecalho(self):
+        cliente = self._criar_app_com_token()
+        resposta = cliente.get(
+            "/api/medicoes", headers={"X-Access-Token": self.TOKEN}
+        )
+        self.assertEqual(resposta.status_code, 200)
+
+    def test_token_na_query_grava_cookie_e_redireciona(self):
+        cliente = self._criar_app_com_token()
+        resposta = cliente.get(f"/?token={self.TOKEN}")
+        self.assertEqual(resposta.status_code, 302)
+        self.assertIn("schulz_token", resposta.headers.get("Set-Cookie", ""))
+        # O token não fica na barra de endereço.
+        self.assertNotIn("token", resposta.headers.get("Location", ""))
+
+    def test_sem_token_configurado_a_aplicacao_fica_aberta(self):
+        # Comportamento do uso local: sem SCHULZ_ACCESS_TOKEN, o acesso
+        # é livre, como nas versões anteriores.
+        os.environ.pop("SCHULZ_ACCESS_TOKEN", None)
+        aplicacao = criar_aplicacao(str(self.banco))
+        aplicacao.config["TESTING"] = True
+        self.assertEqual(aplicacao.test_client().get("/").status_code, 200)
+
+    def test_chave_secreta_nao_e_fixa(self):
+        # A chave que assina o cookie de sessão não pode estar fixa no
+        # código: o repositório é público.
+        aplicacao = criar_aplicacao(str(self.banco))
+        chave = aplicacao.config["SECRET_KEY"]
+        self.assertNotIn("desenvolvimento", chave)
+        self.assertGreaterEqual(len(chave), 32)
+        outra = criar_aplicacao(str(self.banco)).config["SECRET_KEY"]
+        self.assertNotEqual(chave, outra)
 
 
 class TestSegurancaDoUpload(TesteDoWebapp):
