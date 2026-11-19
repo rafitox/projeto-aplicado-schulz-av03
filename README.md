@@ -7,7 +7,7 @@
 
 ---
 
-## O que esta entrega entrega
+## Escopo desta entrega
 
 O roteiro da AV03 pede três itens. Este repositório entrega os três, mais um
 webapp de upload que reaproveita o ETL já usado na disciplina de Big Data.
@@ -18,6 +18,7 @@ webapp de upload que reaproveita o ETL já usado na disciplina de Big Data.
 | 2. Script principal de demonstração | `05_main.py` | entregue |
 | 3. Documentação técnica do MVP (Parte 1) | `06_mvp_parte1.md` | entregue |
 | — Importação de planilhas via webapp | `schulz_mvp/`, `07_webapp.py` | adicionado |
+| — Publicação em túnel (Cloudflare) | `DEPLOY.md` | adicionado |
 
 ---
 
@@ -39,12 +40,13 @@ webapp de upload que reaproveita o ETL já usado na disciplina de Big Data.
 | `schulz_mvp/etl.py` | ETL puro: extração, saneamento, validação |
 | `schulz_mvp/servico_importacao.py` | Gravação do ETL no SQLite |
 | `schulz_mvp/relatorio.py` | Relatório de calibração no terminal |
-| `schulz_mvp/webapp.py` | Aplicação Flask e rotas |
-| `schulz_mvp/templates/` | Templates Jinja2 (upload, prévia, relatório, pendências) |
-| `tests/` | 144 testes automatizados (`unittest`) |
+| `schulz_mvp/webapp.py` | Aplicação Flask, rotas e controle de acesso |
+| `schulz_mvp/templates/` | Templates Jinja2 (upload, prévia, relatório, pendências, acesso) |
+| `tests/` | 153 testes automatizados (`unittest`) |
 | `requirements.txt` | Dependências **opcionais** do webapp |
 | `tools/gerar_pdf.py` | Gera o PDF do documento técnico (pandoc + LaTeX) |
 | `tools/gerar_planilha_exemplo.py` | Gera uma planilha de exemplo no formato MMC |
+| `DEPLOY.md` | Publicação via Cloudflare Tunnel (túnel de teste e nomeado) |
 
 ---
 
@@ -75,8 +77,12 @@ Opções: `python 05_main.py --banco outro.db`
 python -m unittest discover -s tests -v
 ```
 
-141 testes, sem dependências externas. Também rodam sob `pytest`, se o
+153 testes, sem dependências externas. Também rodam sob `pytest`, se o
 avaliador o tiver.
+
+Sem Flask instalado, os 38 testes que dependem dele (os do webapp e o que
+lê a planilha com `openpyxl`) são pulados com uma mensagem apontando o
+`requirements.txt` — o núcleo continua sendo validado.
 
 ### 3. Webapp de upload (recurso adicional)
 
@@ -96,7 +102,22 @@ com dados fictícios, no mesmo layout do formato Calypso/MMC:
 python tools/gerar_planilha_exemplo.py
 ```
 
-### 4. Gerar o PDF do documento técnico
+### 4. Publicar em um túnel (opcional)
+
+```bash
+pip install -r requirements.txt
+export SCHULZ_ACCESS_TOKEN="$(python3 -c 'import secrets; print(secrets.token_urlsafe(18))')"
+.venv/bin/python 07_webapp.py --port 5000          # terminal 1
+
+~/.local/bin/cloudflared tunnel --url http://127.0.0.1:5000   # terminal 2
+```
+
+O `cloudflared` imprime uma URL pública. A aplicação continua ouvindo
+apenas em `127.0.0.1`; quem aceita conexões da internet é o túnel. Os
+detalhes, incluindo o túnel nomeado e o checklist de segurança, estão em
+`DEPLOY.md`.
+
+### 5. Gerar o PDF do documento técnico
 
 ```bash
 python tools/gerar_pdf.py
@@ -113,11 +134,49 @@ projeto.
 | Comando | O que faz |
 |---|---|
 | `python 05_main.py` | Demonstração do Item 2 do roteiro |
-| `python -m unittest discover -s tests -v` | 144 testes |
+| `python -m unittest discover -s tests -v` | 153 testes |
 | `python 07_webapp.py` | Webapp de upload em `127.0.0.1:5000` |
 | `python tools/gerar_planilha_exemplo.py` | Planilha de teste fictícia |
 | `python tools/gerar_pdf.py` | PDF do documento técnico |
+| `cloudflared tunnel --url http://127.0.0.1:5000` | Publica a aplicação em uma URL pública |
 | `sqlite3 calibracao.db < 03c_testes.sql` | 18 consultas de verificação |
+
+---
+
+## Configuração por variável de ambiente
+
+| Variável | Padrão | Função |
+|---|---|---|
+| `SCHULZ_ACCESS_TOKEN` | *(vazio)* | Token exigido em todas as rotas. Definir para expor a aplicação. |
+| `SCHULZ_SECRET_KEY` | aleatória, por execução | Chave que assina o cookie de sessão. Fixar se a sessão precisar sobreviver a reinícios. |
+
+Sem `SCHULZ_ACCESS_TOKEN`, o acesso é livre — é o comportamento do uso
+local. Definido, todas as rotas exigem o token, e a aplicação pode ser
+publicada com segurança.
+
+---
+
+## Controle de acesso (RNF01)
+
+O requisito RNF01 está **parcialmente** implementado nesta entrega: existe
+um controle de acesso por token compartilhado, o que permite publicar a
+aplicação, mas **não** há autenticação com usuário e senha nem controle
+por perfil de acesso. A tabela de permissões por papel é a parte
+pendente.
+
+O token é aceito de três formas:
+
+| Forma | Uso |
+|---|---|
+| Formulário `/acesso` | navegador — o cookie é gravado por 8 horas |
+| `?token=...` | link direto — o servidor redireciona e grava o cookie |
+| `X-Access-Token: ...` | API e scripts (`curl`, automação) |
+
+A chave secreta da sessão é gerada aleatoriamente a cada execução
+(`secrets.token_hex(32)`), nunca fica escrita no código — o repositório é
+público, e uma chave fixa permitiria forjar um cookie de sessão.
+
+---
 
 ## Arquitetura em uma linha
 
@@ -162,7 +221,10 @@ sqlite3 calibracao_v3.db < 03b_migracao.sql
 
 ## Observações
 
-- O webapp escuta apenas em `127.0.0.1` (loopback). Controle de acesso
-  (RNF01) está fora do escopo desta parte e é declarado como limitação.
-- A incerteza (UV), a emissão do certificado em PDF e o controle de acesso
-  são as partes seguintes do projeto.
+- O webapp escuta apenas em `127.0.0.1` (loopback) por padrão. Quem aceita
+  conexões da internet, quando há publicação, é o túnel.
+- A incerteza (UV), a emissão do certificado em PDF e a autenticação com
+  usuário e senha (RNF01) são as partes seguintes do projeto.
+- Nenhum arquivo da empresa (planilha, banco) é versionado — o `.gitignore`
+  protege a lista de extensões, e o repositório contém apenas código e
+  documentação.
